@@ -92,17 +92,28 @@ class TestStudentT:
             likelihood.pdf(vector_data)
 
     @pytest.mark.gpu
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @pytest.mark.skipif(
+        not (
+            torch.cuda.is_available()
+            or (hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
+        ),
+        reason="No GPU (CUDA or MPS) available",
+    )
     def test_gpu_computation(self):
-        """Test computation on GPU."""
-        likelihood = StudentT(device="cuda")
-        data = torch.tensor(1.0, device="cuda")
+        """Test computation on GPU (CUDA or Apple Metal MPS)."""
+        device = (
+            "mps"
+            if (hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
+            else "cuda"
+        )
+        likelihood = StudentT(device=device)
+        data = torch.tensor(1.0, device=device)
 
         log_probs = likelihood.pdf(data)
-        assert log_probs.device.type == "cuda"
+        assert log_probs.device.type == device
 
         likelihood.update_theta(data)
-        assert likelihood.alpha.device.type == "cuda"
+        assert likelihood.alpha.device.type == device
 
 
 class TestMultivariateT:
@@ -205,19 +216,30 @@ class TestMultivariateT:
             likelihood.pdf(wrong_data)
 
     @pytest.mark.gpu
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @pytest.mark.skipif(
+        not (
+            torch.cuda.is_available()
+            or (hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
+        ),
+        reason="No GPU (CUDA or MPS) available",
+    )
     def test_gpu_computation_multivariate(self):
-        """Test multivariate computation on GPU."""
+        """Test multivariate computation on GPU (CUDA or Apple Metal MPS)."""
+        device = (
+            "mps"
+            if (hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
+            else "cuda"
+        )
         dims = 2
-        likelihood = MultivariateT(dims=dims, device="cuda")
-        data = torch.randn(dims, device="cuda")
+        likelihood = MultivariateT(dims=dims, device=device)
+        data = torch.randn(dims, device=device)
 
         log_probs = likelihood.pdf(data)
-        assert log_probs.device.type == "cuda"
+        assert log_probs.device.type == device
 
         likelihood.update_theta(data)
-        assert likelihood.mu.device.type == "cuda"
-        assert likelihood.scale.device.type == "cuda"
+        assert likelihood.mu.device.type == device
+        assert likelihood.scale.device.type == device
 
 
 class TestConsistencyWithOriginal:

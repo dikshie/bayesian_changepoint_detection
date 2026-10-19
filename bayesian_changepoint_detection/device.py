@@ -41,12 +41,24 @@ def get_device(device: Optional[Union[str, torch.device]] = None) -> torch.devic
     """
     if device is None:
         return torch.device("cpu")
-    if isinstance(device, str) and device == "auto":
-        if torch.cuda.is_available():
-            return torch.device("cuda")
-        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            return torch.device("mps")
-        return torch.device("cpu")
+    if isinstance(device, str):
+        dev_str = device.strip().lower()
+        if dev_str in ("metal", "apple_metal", "apple-metal"):
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                return torch.device("mps")
+            return torch.device("cpu")
+        if dev_str == "gpu":
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                return torch.device("mps")
+            if torch.cuda.is_available():
+                return torch.device("cuda")
+            return torch.device("cpu")
+        if dev_str == "auto":
+            if torch.cuda.is_available():
+                return torch.device("cuda")
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                return torch.device("mps")
+            return torch.device("cpu")
 
     return torch.device(device)
 
@@ -177,16 +189,21 @@ def get_device_info() -> dict:
         "device_count": 0,
         "current_device": None,
         "mps_available": False,
+        "metal_available": False,
+        "gpu_available": False,
         "devices": [],
     }
 
     if torch.cuda.is_available():
+        info["gpu_available"] = True
         info["device_count"] = torch.cuda.device_count()
         info["current_device"] = torch.cuda.current_device()
         info["devices"] = [f"cuda:{i}" for i in range(info["device_count"])]
 
     if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         info["mps_available"] = True
+        info["metal_available"] = True
+        info["gpu_available"] = True
         info["devices"].append("mps")
 
     info["devices"].append("cpu")

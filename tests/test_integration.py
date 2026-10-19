@@ -103,8 +103,12 @@ class TestIntegration:
 
     def test_device_consistency(self):
         """Test that device handling is consistent throughout."""
-        if not torch.cuda.is_available():
-            pytest.skip("CUDA not available")
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            gpu_device = "mps"
+        elif torch.cuda.is_available():
+            gpu_device = "cuda"
+        else:
+            pytest.skip("No GPU (CUDA or MPS) available")
 
         # Generate data on CPU
         partition, data = generate_mean_shift_example(
@@ -113,15 +117,15 @@ class TestIntegration:
 
         # Run detection on GPU
         hazard_func = partial(constant_hazard, 60)
-        likelihood = StudentT(alpha=0.1, beta=0.01, kappa=1, mu=0, device="cuda")
+        likelihood = StudentT(alpha=0.1, beta=0.01, kappa=1, mu=0, device=gpu_device)
 
         R, map_run_lengths = online_changepoint_detection(
-            data.squeeze(), hazard_func, likelihood, device="cuda"
+            data.squeeze(), hazard_func, likelihood, device=gpu_device
         )
 
         # Verify results are on GPU
-        assert R.device.type == "cuda"
-        assert map_run_lengths.device.type == "cuda"
+        assert R.device.type == gpu_device
+        assert map_run_lengths.device.type == gpu_device
 
     def test_backward_compatibility(self):
         """Test that the refactored code maintains backward compatibility."""

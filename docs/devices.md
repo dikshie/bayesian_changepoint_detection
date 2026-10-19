@@ -17,14 +17,15 @@ benchmarked ([issue #43](https://github.com/hildensia/bayesian_changepoint_detec
 
 `get_device(None)` returns the CPU, and every likelihood constructor calls
 it, so a likelihood built without `device` lives on the CPU.
-`get_device("auto")` picks the first available of CUDA, MPS, CPU. (Up to
-1.1.0 the automatic choice was the default, which put every computation on
+`get_device("auto")` picks the first available of CUDA, MPS, CPU. Pass
+`"metal"`, `"apple_metal"`, or `"mps"` to target Apple Metal explicitly on macOS.
+(Up to 1.1.0 the automatic choice was the default, which put every computation on
 an accelerator that was usually slower.)
 
 ```python
 from bayesian_changepoint_detection import get_device, get_device_info
 
-print(get_device_info())  # cuda_available, mps_available, devices, ...
+print(get_device_info())  # cuda_available, mps_available, metal_available, devices, ...
 print(get_device())  # cpu: the default
 print(get_device("auto"))  # the best available device on this machine
 print(get_device("cpu"))  # an explicit choice is returned unchanged
@@ -116,7 +117,8 @@ with the hardware, PyTorch version, dtype, series length and dimension.
 ## Measuring on your own hardware
 
 `examples/gpu_acceleration.py` times the online detector on the CPU and, when
-CUDA is available, on the GPU, and checks that the two agree.
+a GPU is available (Apple Metal MPS on Apple Silicon or CUDA on NVIDIA),
+on the GPU, and checks that the two agree.
 `examples/benchmark_offline.py` times the offline detector at several
 lengths. For a quick check of your own workload, time it like this. Three
 details matter: GPU work is asynchronous, so synchronize before reading the

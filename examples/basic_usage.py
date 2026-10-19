@@ -42,6 +42,7 @@ def main():
         f"Using device: {device} (the default; device='auto' would pick {get_device('auto')})"
     )
     print(f"Available devices: {device_info['devices']}")
+    print(f"Apple Metal (MPS) available: {device_info['mps_available']}")
     print(f"CUDA available: {device_info['cuda_available']}")
     print()
 

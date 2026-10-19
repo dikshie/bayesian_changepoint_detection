@@ -156,11 +156,14 @@ class TestGPUDevice:
         """Test MPS device functionality (Apple Silicon)."""
         device = get_device("mps")
         assert device.type == "mps"
+        assert get_device("metal").type == "mps"
+        assert get_device("apple_metal").type == "mps"
 
         # Test tensor creation on MPS
         data = [1, 2, 3]
         tensor = to_tensor(data, device="mps")
         assert tensor.device.type == "mps"
+        assert to_tensor(data, device="metal").device.type == "mps"
 
 
 @pytest.mark.gpu

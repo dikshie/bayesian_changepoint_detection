@@ -130,9 +130,8 @@ cython_debug/
 test.out
 debug_*.py
 
-# UV lock file (can be included or excluded based on preference)
-# uv.lock
-EOF < /dev/null
+# UV lock file
+uv.lock
 
 # Figures written by the example scripts into the working directory
 /*.png

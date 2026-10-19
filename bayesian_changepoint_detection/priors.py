@@ -63,13 +63,13 @@ def const_prior(
     if not 0 < p <= 1:
         raise ValueError("Probability p must be between 0 and 1")
 
-    log_p = torch.log(torch.tensor(p, dtype=torch.float32))
-
     if isinstance(t, int):
+        log_p = torch.log(torch.tensor(p, dtype=torch.float32))
         return log_p.item()
     else:
         device = get_device(device)
         t_tensor = ensure_tensor(t, device=device)
+        log_p = torch.log(torch.tensor(p, dtype=torch.float32, device=t_tensor.device))
         return log_p.expand_as(t_tensor)
 
 

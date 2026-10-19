@@ -177,32 +177,43 @@ class TestPriorDeviceHandling:
     """Test device handling for priors."""
 
     @pytest.mark.gpu
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @pytest.mark.skipif(
+        not (
+            torch.cuda.is_available()
+            or (hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
+        ),
+        reason="No GPU (CUDA or MPS) available",
+    )
     def test_device_consistency(self):
         """Test that priors work correctly with different devices."""
+        gpu_device = (
+            "mps"
+            if (hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
+            else "cuda"
+        )
         t_cpu = torch.arange(1, 6)
-        t_cuda = t_cpu.cuda()
+        t_cuda = t_cpu.to(gpu_device)
 
         # Test const_prior
         log_probs_cpu = const_prior(t_cpu, p=0.1, device="cpu")
-        log_probs_cuda = const_prior(t_cuda, p=0.1, device="cuda")
+        log_probs_cuda = const_prior(t_cuda, p=0.1, device=gpu_device)
 
         assert log_probs_cpu.device.type == "cpu"
-        assert log_probs_cuda.device.type == "cuda"
+        assert log_probs_cuda.device.type == gpu_device
         assert torch.allclose(log_probs_cpu, log_probs_cuda.cpu())
 
         # Test geometric_prior
         geom_cpu = geometric_prior(t_cpu, p=0.2, device="cpu")
-        geom_cuda = geometric_prior(t_cuda, p=0.2, device="cuda")
+        geom_cuda = geometric_prior(t_cuda, p=0.2, device=gpu_device)
 
         assert geom_cpu.device.type == "cpu"
-        assert geom_cuda.device.type == "cuda"
+        assert geom_cuda.device.type == gpu_device
         assert torch.allclose(geom_cpu, geom_cuda.cpu())
 
         # Test negative_binomial_prior
         nb_cpu = negative_binomial_prior(t_cpu, k=2, p=0.3, device="cpu")
-        nb_cuda = negative_binomial_prior(t_cuda, k=2, p=0.3, device="cuda")
+        nb_cuda = negative_binomial_prior(t_cuda, k=2, p=0.3, device=gpu_device)
 
         assert nb_cpu.device.type == "cpu"
-        assert nb_cuda.device.type == "cuda"
+        assert nb_cuda.device.type == gpu_device
         assert torch.allclose(nb_cpu, nb_cuda.cpu(), equal_nan=True)

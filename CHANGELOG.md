@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Support for Apple Metal (`"metal"`, `"apple_metal"`, and `"gpu"` aliases) in
+  `get_device()`, resolving to `torch.device("mps")` on macOS Apple Silicon.
+- `metal_available` and `gpu_available` flags in `get_device_info()`.
+- Unified GPU acceleration benchmark and example in
+  `examples/gpu_acceleration.py` supporting Apple Metal (MPS) alongside
+  NVIDIA CUDA with device-specific synchronization and memory telemetry.
+- Project instructions and configuration for Gemini-Antigravity in `GEMINI.md`
+  and specialized skills under `.agents/skills/`.
+
+### Fixed
+
+- Fixed tensor device placement in `const_prior` so expanded log-probability
+  tensors preserve the target device (`mps` or `cuda`) instead of staying on
+  CPU.
+- Fixed warmup pass in `examples/gpu_acceleration.py` to adhere to the
+  single-use invariant of online likelihood objects.
+- Enabled GPU-marked integration, likelihood, and prior tests to execute on
+  Apple Metal (MPS) when CUDA is unavailable.
+
 ## [1.2.1] — 2026-09-23
 
 No code change: the library behaves exactly as 1.2.0.

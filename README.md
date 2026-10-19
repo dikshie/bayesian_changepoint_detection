@@ -229,7 +229,7 @@ mode. Read `changepoint_probabilities` when the exact position matters.
 ### Devices
 
 Every likelihood and both detectors take a `device` argument. The default
-is the CPU; name a device on the likelihood (`"cuda"`, `"mps"`, or `"auto"`
+is the CPU; name a device on the likelihood (`"cuda"`, `"mps"`, `"metal"`, or `"auto"`
 for the first available) to opt into an accelerator, and the detectors
 follow it. On a laptop the CPU is the faster choice for the online detector
 (measured: 6–30x faster than MPS), and the offline detector always runs on

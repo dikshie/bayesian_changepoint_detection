@@ -56,7 +56,8 @@ Two things that surprise people:
 - **The suite is dramatically slower on an accelerator**: small tensors on
   MPS or CUDA are slower than on the CPU (minutes against seconds on Apple
   Silicon). The default device is the CPU since 1.2.0 (`get_device(None)`;
-  `"auto"` opts into an accelerator), and both detectors follow the
+  `"auto"` opts into an accelerator; `"metal"` or `"mps"` targets Apple
+  Silicon), and both detectors follow the
   likelihood's device. Still pass `device="cpu"` explicitly in tests unless
   the test is specifically about device handling.
 - Tests that need a GPU should carry `@pytest.mark.gpu` and skip themselves
