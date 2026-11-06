@@ -19,13 +19,52 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
-- Fixed tensor device placement in `const_prior` so expanded log-probability
-  tensors preserve the target device (`mps` or `cuda`) instead of staying on
-  CPU.
-- Fixed warmup pass in `examples/gpu_acceleration.py` to adhere to the
-  single-use invariant of online likelihood objects.
-- Enabled GPU-marked integration, likelihood, and prior tests to execute on
-  Apple Metal (MPS) when CUDA is unavailable.
+Found on the first run of the library on a CUDA GPU (TITAN Xp, torch
+2.14.1+cu126); none of these shows on the CPU-only CI.
+
+- `const_prior` returns its tensor on the requested device: `log_p` was
+  built on the CPU and expanded over the input, so a CUDA `t` came back on
+  the CPU. The detectors pass ints and were unaffected.
+- Online `MultivariateT.update_theta` forms the rank-one outer product with
+  a broadcast multiply instead of `torch.bmm`. torch 2.14+ routes `bmm` on
+  that shape to a Triton kernel on CUDA, which compiles C at run time and
+  fails with "Failed to find C compiler" on a machine without one. The
+  values are identical (maximum difference 0.0 in the run-length posterior
+  on 3 000-point series) and CPU timings are unchanged within noise.
+- The three online recursions (`online_changepoint_detection`,
+  `viterbi_changepoints`, `OnlineChangepointDetector`) move the hazard's
+  output to the detector's device, so a hazard built with its own `device=`
+  no longer raises "Expected all tensors to be on the same device" when it
+  differs from the likelihood's.
+- `negative_binomial_prior` pins its float64 scratch tensors to the CPU, so
+  it works under `torch.set_default_device("cuda")`.
+- `examples/gpu_acceleration.py` gives each warm-up run its own likelihood
+  (online likelihoods are single-use; reusing one crashed the first GPU
+  timing with a shape error) and its docstring says what it measures: at
+  the example's sizes the GPU is slower than the CPU.
+- `test_device_consistency` in `tests/test_integration.py` now carries the
+  `gpu` marker, so `pytest -m gpu` includes it, and executes on Apple Metal
+  (MPS) when CUDA is unavailable.
+
+### Removed
+
+- The `gpu` extra in `pyproject.toml`: it asked for `torch[cuda]`, an extra
+  torch does not define, so it installed the default wheel. The README's
+  installation section says how to pick a CUDA wheel instead.
+
+## [1.2.2] — 2026-11-05
+
+### Changed
+
+- `online_changepoint_detection` writes each posterior as a contiguous row
+  and transposes that matrix in place. This is about 21% less time at
+  5,000 points. `R` changes at float32 rounding level (largest difference
+  about 1.3e-6 absolute and 1.1e-5 relative) and no detection moved.
+- Online `StudentT.update_theta` keeps one prior column and stacks the
+  Normal-Gamma update, instead of allocating a new tensor for each of
+  `mu`, `kappa`, `alpha` and `beta` on every observation. The `*0`
+  hyperparameters are read once, at the first observation. The run-length
+  posterior is unchanged.
 
 ## [1.2.1] — 2026-09-23
 

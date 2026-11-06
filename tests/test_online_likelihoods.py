@@ -115,6 +115,95 @@ class TestStudentT:
         likelihood.update_theta(data)
         assert likelihood.alpha.device.type == device
 
+    def test_inference_mode_construction(self):
+        """A model built under inference mode still updates outside it."""
+        with torch.inference_mode():
+            model = StudentT(alpha=0.1, beta=0.01, kappa=1.0, mu=0.0, device="cpu")
+        data = torch.tensor(1.25)
+        log_probs = model.pdf(data)
+        model.update_theta(data)
+        assert log_probs.shape == (1,)
+        assert torch.isfinite(log_probs).all()
+        assert model.alpha.shape == (2,)
+        assert model._prior.shape == (4, 1)
+        model.update_theta(torch.tensor(-0.5))
+        assert model.alpha.shape == (3,)
+        assert torch.isfinite(model.mu).all()
+
+    def test_prior_column_after_first_observation_at_large_offset(self):
+        """Run length 0 is the centered prior, including at a large offset."""
+        offset = 1.0e8
+        mu0, alpha0, beta0, kappa0 = 5.0, 0.1, 0.01, 1.0
+        model = StudentT(alpha=alpha0, beta=beta0, kappa=kappa0, mu=mu0, device="cpu")
+        assert "_prior" not in vars(model)
+
+        model.update_theta(torch.tensor(offset, dtype=torch.float64))
+
+        expected = torch.tensor(
+            [[mu0 - offset], [kappa0], [alpha0], [beta0]],
+            dtype=torch.float32,
+        )
+        assert model._prior.shape == (4, 1)
+        assert model._prior.dtype == torch.float32
+        assert model._prior.device == torch.device("cpu")
+        assert torch.equal(model._prior, expected)
+        assert torch.equal(model._mu_c[:1], model._prior[0])
+        assert torch.equal(model.kappa[:1], model._prior[1])
+        assert torch.equal(model.alpha[:1], model._prior[2])
+        assert torch.equal(model.beta[:1], model._prior[3])
+
+    def test_to_before_and_after_first_observation(self, monkeypatch):
+        """``to()`` runs with no prior column, then moves that column."""
+        seen = []
+        real_to = torch.Tensor.to
+
+        def record(tensor, *args, **kwargs):
+            result = real_to(tensor, *args, **kwargs)
+            seen.append(result)
+            return result
+
+        monkeypatch.setattr(torch.Tensor, "to", record)
+
+        model = StudentT(alpha=0.2, beta=0.3, kappa=1.5, mu=4.0, device="cpu")
+        # CPU-only runs have no second device. Point the model elsewhere so
+        # ``to()`` takes the move path instead of returning immediately.
+        model.device = torch.device("meta")
+        seen.clear()
+        returned = model.to("cpu")
+        assert returned is model
+        assert model.device == torch.device("cpu")
+        assert "_prior" not in vars(model)
+        assert any(tensor is model.alpha for tensor in seen)
+        assert any(tensor is model.beta for tensor in seen)
+        assert any(tensor is model.kappa for tensor in seen)
+        assert any(tensor is model._mu_c for tensor in seen)
+
+        model.update_theta(torch.tensor(1.0e8, dtype=torch.float64))
+        prior = model._prior.clone()
+        seen.clear()
+        model.device = torch.device("meta")
+        model.to("cpu")
+        assert any(tensor is model._prior for tensor in seen)
+        assert model._prior.device == torch.device("cpu")
+        assert torch.equal(model._prior, prior)
+        assert model.alpha.device == torch.device("cpu")
+        assert model._mu_c.device == torch.device("cpu")
+
+    def test_subclass_alpha0_is_read_at_the_first_observation(self):
+        """A subclass that sets ``alpha0`` after ``super().__init__`` is used."""
+
+        class RaisedAlpha(StudentT):
+            def __init__(self):
+                super().__init__(alpha=0.1, beta=0.01, kappa=1.0, mu=0.0, device="cpu")
+                self.alpha0 = 4.0
+
+        model = RaisedAlpha()
+        model.update_theta(torch.tensor(1.5))
+        assert model.alpha[0].item() == pytest.approx(4.0)
+        assert model.beta[0].item() == pytest.approx(0.01)
+        assert model.kappa[0].item() == pytest.approx(1.0)
+        assert model._prior[2, 0].item() == pytest.approx(4.0)
+
 
 class TestMultivariateT:
     """Test multivariate Student's t-distribution likelihood."""
@@ -199,6 +288,25 @@ class TestMultivariateT:
         # First elements should be initial parameters
         assert torch.allclose(likelihood.mu[0], likelihood.mu0)
         assert torch.allclose(likelihood.scale[0], likelihood.scale0)
+
+    def test_scale_update_matches_bmm_outer_product(self):
+        """The rank-one scale update uses a broadcast outer product instead
+        of ``torch.bmm`` (which torch 2.14+ sends through a Triton kernel on
+        CUDA, needing a C compiler). The two must agree bit for bit."""
+        torch.manual_seed(0)
+        dims = 3
+        likelihood = MultivariateT(dims=dims, device="cpu")
+        series = torch.randn(6, dims)
+        for t, x in enumerate(series):
+            # Reference: the previous formula, on the same state.
+            centered = likelihood._center(x).unsqueeze(0) - likelihood._mu_c
+            weight = (likelihood.kappa / (likelihood.kappa + 1))[:, None, None]
+            expected = likelihood.scale_inv + weight * torch.bmm(
+                centered.unsqueeze(2), centered.unsqueeze(1)
+            )
+            likelihood.update_theta(x)
+            assert likelihood.scale_inv.shape == (t + 2, dims, dims)
+            assert torch.equal(likelihood.scale_inv[1:], expected)
 
     def test_input_shape_validation(self):
         """Test input shape validation."""

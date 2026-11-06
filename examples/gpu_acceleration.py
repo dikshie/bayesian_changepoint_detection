@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 """
-GPU acceleration example for Bayesian changepoint detection.
+GPU timing and acceleration example for Bayesian changepoint detection.
 
-This example demonstrates the performance and device mechanics of using GPU
-acceleration (Apple Metal / MPS on macOS Apple Silicon, or NVIDIA CUDA on Linux/Windows)
-with the PyTorch-based implementation.
+This script times the online detector on the CPU and, when an accelerator
+(Apple Metal / MPS on macOS, or NVIDIA CUDA on Linux/Windows) is available,
+on the GPU, and checks that the two give the same result.
+
+It does not show a GPU speedup at small sizes (1 000 univariate points,
+300 points in 3 dimensions): the online recursion is a loop of small tensor
+operations and GPU launch overhead makes it slower than CPU. GPU acceleration
+pays off for the online detector on longer series or higher dimensions;
+see ``docs/devices.md``.
 """
 
 import time
@@ -134,13 +140,14 @@ def benchmark_univariate(data_length=1000, num_runs=3):
                 alpha=0.1, beta=0.01, kappa=1, mu=0, device=gpu_dev
             )
 
-            # Warm up GPU with a separate single-use likelihood
+            # Warm up GPU. An online likelihood is single-use (its state
+            # grows with every observation), so the warm-up gets its own.
             if run == 0:
-                warmup_likelihood = StudentT(
-                    alpha=0.1, beta=0.01, kappa=1, mu=0, device=gpu_dev
-                )
                 _ = online_changepoint_detection(
-                    data_gpu.squeeze(), hazard_func, warmup_likelihood, device=gpu_dev
+                    data_gpu.squeeze(),
+                    hazard_func,
+                    StudentT(alpha=0.1, beta=0.01, kappa=1, mu=0, device=gpu_dev),
+                    device=gpu_dev,
                 )
                 gpu_sync(gpu_dev)
 
@@ -157,7 +164,7 @@ def benchmark_univariate(data_length=1000, num_runs=3):
         print(f"Average GPU time: {avg_gpu_time:.3f}s")
 
         speedup = avg_cpu_time / avg_gpu_time
-        print(f"\nSpeedup: {speedup:.2f}x")
+        print(f"\nSpeedup: {speedup:.2f}x (below 1 means the CPU is faster)")
 
         # Verify results are consistent
         data_cpu = data.to("cpu")
@@ -233,11 +240,13 @@ def benchmark_multivariate(dims=5, data_length=500, num_runs=3):
             hazard_func = partial(constant_hazard, 200)
             likelihood_gpu = MultivariateT(dims=dims, device=gpu_dev)
 
-            # Warm up GPU with a separate single-use likelihood
+            # Warm up GPU, on a fresh single-use likelihood.
             if run == 0:
-                warmup_likelihood = MultivariateT(dims=dims, device=gpu_dev)
                 _ = online_changepoint_detection(
-                    data_gpu, hazard_func, warmup_likelihood, device=gpu_dev
+                    data_gpu,
+                    hazard_func,
+                    MultivariateT(dims=dims, device=gpu_dev),
+                    device=gpu_dev,
                 )
                 gpu_sync(gpu_dev)
 
@@ -254,7 +263,7 @@ def benchmark_multivariate(dims=5, data_length=500, num_runs=3):
         print(f"Average GPU time: {avg_gpu_time:.3f}s")
 
         speedup = avg_cpu_time / avg_gpu_time
-        print(f"\nSpeedup: {speedup:.2f}x")
+        print(f"\nSpeedup: {speedup:.2f}x (below 1 means the CPU is faster)")
 
     else:
         print("\nGPU not available - skipping GPU benchmark")
