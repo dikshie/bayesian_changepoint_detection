@@ -158,6 +158,8 @@ class TestGPUDevice:
         assert device.type == "mps"
         assert get_device("metal").type == "mps"
         assert get_device("apple_metal").type == "mps"
+        assert get_device("apple-metal").type == "mps"
+        assert get_device("gpu").type == "mps"
 
         # Test tensor creation on MPS
         data = [1, 2, 3]

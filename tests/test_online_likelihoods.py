@@ -5,7 +5,12 @@ Tests for online likelihood functions.
 import pytest
 import torch
 
-from bayesian_changepoint_detection.online_likelihoods import MultivariateT, StudentT
+from bayesian_changepoint_detection.online_likelihoods import (
+    MultivariateT,
+    NormalKnownVariance,
+    Poisson,
+    StudentT,
+)
 
 pytestmark = pytest.mark.behavior
 
@@ -348,6 +353,56 @@ class TestMultivariateT:
         likelihood.update_theta(data)
         assert likelihood.mu.device.type == device
         assert likelihood.scale.device.type == device
+
+    @pytest.mark.gpu
+    @pytest.mark.skipif(
+        not (
+            torch.cuda.is_available()
+            or (hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
+        ),
+        reason="No GPU (CUDA or MPS) available",
+    )
+    def test_gpu_computation_poisson(self):
+        """Test Poisson computation on GPU (CUDA or Apple Metal MPS)."""
+        device = (
+            "mps"
+            if (hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
+            else "cuda"
+        )
+        likelihood = Poisson(alpha=1.0, beta=1.0, device=device)
+        data = torch.tensor(2.0, device=device)
+
+        log_probs = likelihood.pdf(data)
+        assert log_probs.device.type == device
+
+        likelihood.update_theta(data)
+        assert likelihood.alpha.device.type == device
+        assert likelihood.beta.device.type == device
+
+    @pytest.mark.gpu
+    @pytest.mark.skipif(
+        not (
+            torch.cuda.is_available()
+            or (hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
+        ),
+        reason="No GPU (CUDA or MPS) available",
+    )
+    def test_gpu_computation_normal_known_variance(self):
+        """Test NormalKnownVariance computation on GPU (CUDA or Apple Metal MPS)."""
+        device = (
+            "mps"
+            if (hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
+            else "cuda"
+        )
+        likelihood = NormalKnownVariance(variance=1.0, device=device)
+        data = torch.tensor(1.5, device=device)
+
+        log_probs = likelihood.pdf(data)
+        assert log_probs.device.type == device
+
+        likelihood.update_theta(data)
+        assert likelihood.mu.device.type == device
+        assert likelihood.var.device.type == device
 
 
 class TestConsistencyWithOriginal:
